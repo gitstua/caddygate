@@ -98,9 +98,6 @@ func (a *Agent) syncExisting(ctx context.Context) error {
 			a.log.Error("upsert route", "host", host, "err", err)
 		} else {
 			a.log.Info("registered container", "host", host, "upstream", upstream)
-			if err := a.caddy.ProvisionCert(host); err != nil {
-				a.log.Warn("cert provision request failed", "host", host, "err", err)
-			}
 		}
 	}
 	return nil
@@ -171,9 +168,6 @@ func (a *Agent) handleEvent(event dockerEvent) {
 			a.log.Error("upsert route on start", "host", host, "err", err)
 		} else {
 			a.log.Info("container started, route registered", "host", host, "upstream", upstream)
-			if err := a.caddy.ProvisionCert(host); err != nil {
-				a.log.Warn("cert provision request failed", "host", host, "err", err)
-			}
 		}
 
 	case "die", "stop", "kill":

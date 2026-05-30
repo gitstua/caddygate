@@ -51,14 +51,20 @@
               }]
             }
           ],
-          "tls_connection_policies": [{}]
+          "tls_connection_policies": [{ "on_demand": true }]
         }
       }
     },
     "tls": {
       "automation": {
+        "on_demand": {
+          "permission": {
+            "module": "http",
+            "endpoint": "http://localhost:8081/tls-check"
+          }
+        },
         "policies": [{
-          "subjects": ["*.${CADDYGATE_BASE_DOMAIN}"],
+          "on_demand": true,
           "issuers": [{
             "module": "acme",
             "challenges": {

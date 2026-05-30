@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -96,12 +97,19 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/hello-its-me/", enrollHandler)
-	// Health check for the sidecar itself
+	// Caddy on-demand TLS permission check — only allow *.BASE_DOMAIN
+	mux.HandleFunc("/tls-check", func(w http.ResponseWriter, r *http.Request) {
+		domain := r.URL.Query().Get("domain")
+		if strings.HasSuffix(domain, "."+cfg.BaseDomain) {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusForbidden)
+		}
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
-	// Catch-all: 404
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	})
