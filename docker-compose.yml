@@ -1,0 +1,38 @@
+services:
+  caddygate:
+    build:
+      context: .
+      args:
+        DNS_MODULE: github.com/caddy-dns/cloudflare  # change for your provider
+    image: ghcr.io/yourorg/caddygate:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./caddy_data:/data        # TLS certs + autosaved config (allowlist persists here)
+      - ./caddy_config:/config    # base caddy.json (written on first boot)
+    env_file: .env
+    networks:
+      - caddygate
+
+  # Example application container — CaddyGate discovers it automatically
+  whoami:
+    image: traefik/whoami
+    restart: unless-stopped
+    labels:
+      caddygate.enable: "true"
+      caddygate.name: "whoami"
+      caddygate.port: "80"
+      caddygate.health_path: "/health"
+    networks:
+      - caddygate
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  caddygate:
+    driver: bridge

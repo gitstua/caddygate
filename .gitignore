@@ -1,0 +1,6 @@
+.env
+*.env
+caddy_data/
+caddy_config/
+caddygate
+.DS_Store

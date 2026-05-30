@@ -1,0 +1,73 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	BaseDomain      string
+	EnrollmentUUID  string
+	InitialCIDRs    []string
+	TrustedProxies  []string
+	AdminSocket     string
+	EnrollRateLimit int
+	LogLevel        string
+	ListenAddr      string
+}
+
+func Load() (*Config, error) {
+	c := &Config{
+		AdminSocket:     getEnv("CADDYGATE_ADMIN_SOCKET", "/run/caddy/admin.sock"),
+		EnrollRateLimit: 10,
+		LogLevel:        getEnv("CADDYGATE_LOG_LEVEL", "info"),
+		ListenAddr:      getEnv("CADDYGATE_LISTEN_ADDR", ":8081"),
+	}
+
+	c.BaseDomain = os.Getenv("CADDYGATE_BASE_DOMAIN")
+	if c.BaseDomain == "" {
+		return nil, fmt.Errorf("CADDYGATE_BASE_DOMAIN is required")
+	}
+
+	c.EnrollmentUUID = os.Getenv("CADDYGATE_ENROLLMENT_UUID")
+	if c.EnrollmentUUID == "" {
+		return nil, fmt.Errorf("CADDYGATE_ENROLLMENT_UUID is required")
+	}
+
+	if raw := os.Getenv("CADDYGATE_INITIAL_CIDRS"); raw != "" {
+		for _, cidr := range strings.Split(raw, ",") {
+			cidr = strings.TrimSpace(cidr)
+			if cidr != "" {
+				c.InitialCIDRs = append(c.InitialCIDRs, cidr)
+			}
+		}
+	}
+
+	if raw := os.Getenv("CADDYGATE_TRUSTED_PROXIES"); raw != "" {
+		for _, cidr := range strings.Split(raw, " ") {
+			cidr = strings.TrimSpace(cidr)
+			if cidr != "" {
+				c.TrustedProxies = append(c.TrustedProxies, cidr)
+			}
+		}
+	}
+
+	if raw := os.Getenv("CADDYGATE_ENROLL_RATE_LIMIT"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("CADDYGATE_ENROLL_RATE_LIMIT must be an integer: %w", err)
+		}
+		c.EnrollRateLimit = n
+	}
+
+	return c, nil
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}

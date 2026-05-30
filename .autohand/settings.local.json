@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allowList": [
+      "shell:go run cmd/caddygate/main.go"
+    ]
+  },
+  "version": 1
+}
