@@ -1,5 +1,8 @@
 # CaddyGate
 
+> [!CAUTION]
+> This project is experimental. Use at own risk as it will likely break. It does not work on MacOS with Docker as the networking stack presents the wrong IP to the filtering
+
 A zero-trust reverse proxy for Docker workloads. Caddy handles TLS (wildcard certs via DNS-01 ACME). A Go sidecar handles IP enrollment and Docker service discovery. No database — the allowlist lives directly in Caddy's config and survives restarts.
 
 All traffic is denied by default. Users enroll their IP by visiting a secret URL. Docker containers are discovered automatically and get a subdomain — no config edits needed.
