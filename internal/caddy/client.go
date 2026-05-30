@@ -147,6 +147,20 @@ func (c *Client) AddAllowedRange(cidr string) error {
 	return nil
 }
 
+// ProvisionCert asks Caddy to obtain and manage a certificate for the given host.
+// This is needed because Caddy only auto-provisions certs for domains visible in
+// top-level route host matchers; domains inside subroutes are not scanned.
+func (c *Client) ProvisionCert(host string) error {
+	_, status, err := c.do("POST", "/certificates/automate", []string{host})
+	if err != nil {
+		return err
+	}
+	if status != 200 && status != 201 {
+		return fmt.Errorf("caddy returned %d automating cert for %s", status, host)
+	}
+	return nil
+}
+
 // IsAllowed checks whether a given IP is covered by any range in the allowlist.
 func (c *Client) IsAllowed(ip string) (bool, error) {
 	ranges, err := c.GetAllowedRanges()
