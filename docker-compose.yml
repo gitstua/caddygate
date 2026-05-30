@@ -22,7 +22,6 @@ services:
     image: traefik/whoami
     restart: unless-stopped
     labels:
-      caddygate.enable: "true"
       caddygate.name: "whoami"
       caddygate.port: "80"
       caddygate.health_path: "/health"

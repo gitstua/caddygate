@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yourorg/caddygate/internal/caddy"
@@ -41,7 +40,6 @@ func NewAgent(baseDomain string, caddyClient *caddy.Client, log *slog.Logger) *A
 // containerInfo holds the labels we care about from a Docker container inspect.
 type containerInfo struct {
 	Name   string
-	Enable bool
 	Port   string
 	Health string
 }
@@ -91,7 +89,7 @@ func (a *Agent) syncExisting(ctx context.Context) error {
 
 	for _, c := range containers {
 		info := parseLabels(c.Labels)
-		if !info.Enable {
+		if info.Name == "" {
 			continue
 		}
 		host := info.Name + "." + a.baseDomain
@@ -161,7 +159,7 @@ func (a *Agent) handleEvent(event dockerEvent) {
 
 	switch event.Action {
 	case "start":
-		if !info.Enable {
+		if info.Name == "" {
 			return
 		}
 		host := info.Name + "." + a.baseDomain
@@ -173,7 +171,7 @@ func (a *Agent) handleEvent(event dockerEvent) {
 		}
 
 	case "die", "stop", "kill":
-		if !info.Enable {
+		if info.Name == "" {
 			return
 		}
 		host := info.Name + "." + a.baseDomain
@@ -191,8 +189,6 @@ func parseLabels(labels map[string]string) containerInfo {
 	}
 	for k, v := range labels {
 		switch k {
-		case "caddygate.enable":
-			info.Enable = strings.EqualFold(v, "true")
 		case "caddygate.name":
 			info.Name = v
 		case "caddygate.port":
