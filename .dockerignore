@@ -1,0 +1,7 @@
+.env
+*.env
+caddy_data/
+caddy_config/
+.git/
+.github/
+*.md
