@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yourorg/caddygate/internal/admin"
 	"github.com/yourorg/caddygate/internal/allowlist"
 	"github.com/yourorg/caddygate/internal/caddy"
 	"github.com/yourorg/caddygate/internal/config"
@@ -77,6 +78,22 @@ func main() {
 		log,
 	)
 
+	// Admin page server (LAN-only, not routed through Caddy)
+	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentUUID, caddyClient, log)
+	adminSrv := &http.Server{
+		Addr:         cfg.AdminPageAddr,
+		Handler:      adminHandler,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	go func() {
+		log.Info("admin page listening", "addr", cfg.AdminPageAddr)
+		if err := adminSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("admin server error", "err", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.Handle("/hello-its-me/", enrollHandler)
 	// Health check for the sidecar itself
@@ -112,6 +129,9 @@ func main() {
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("server shutdown error", "err", err)
+	}
+	if err := adminSrv.Shutdown(shutdownCtx); err != nil {
+		log.Error("admin server shutdown error", "err", err)
 	}
 }
 

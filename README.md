@@ -158,7 +158,8 @@ All config via `.env`:
 | `CADDYGATE_ENROLL_RATE_LIMIT` | `10` | Max enrollment attempts/min per IP |
 | `CADDYGATE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `CADDYGATE_ADMIN_SOCKET` | `/run/caddy/admin.sock` | Caddy Admin API socket path |
-| `CADDYGATE_LISTEN_ADDR` | `:8081` | Sidecar HTTP listen address |
+| `CADDYGATE_LISTEN_ADDR` | `:8081` | Sidecar HTTP listen address (internal) |
+| `CADDYGATE_ADMIN_ADDR` | `:7080` | Admin page address — access via `http://<host-ip>:7080` |
 
 ---
 

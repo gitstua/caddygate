@@ -16,6 +16,7 @@ type Config struct {
 	EnrollRateLimit int
 	LogLevel        string
 	ListenAddr      string
+	AdminPageAddr   string
 }
 
 func Load() (*Config, error) {
@@ -24,6 +25,7 @@ func Load() (*Config, error) {
 		EnrollRateLimit: 10,
 		LogLevel:        getEnv("CADDYGATE_LOG_LEVEL", "info"),
 		ListenAddr:      getEnv("CADDYGATE_LISTEN_ADDR", ":8081"),
+		AdminPageAddr:   getEnv("CADDYGATE_ADMIN_ADDR", ":7080"),
 	}
 
 	c.BaseDomain = os.Getenv("CADDYGATE_BASE_DOMAIN")

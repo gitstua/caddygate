@@ -9,6 +9,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "7080:7080"   # admin page — LAN only, do not forward from router
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./caddy_data:/data        # TLS certs + autosaved config (allowlist persists here)
