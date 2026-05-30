@@ -2,5 +2,5 @@
 *.env
 caddy_data/
 caddy_config/
-caddygate
+/caddygate
 .DS_Store
