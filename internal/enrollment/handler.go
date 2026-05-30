@@ -15,13 +15,13 @@ const enrollPrefix = "/hello-its-me/"
 
 // rateBucket tracks attempts per IP for rate limiting.
 type rateBucket struct {
-	count    int
+	count       int
 	windowStart time.Time
 }
 
-// Handler handles the /hello-its-me/{uuid} enrollment endpoint.
+// Handler handles the /hello-its-me/{secret} enrollment endpoint.
 type Handler struct {
-	uuid           string
+	secret         string
 	caddy          *caddy.Client
 	rateLimit      int
 	trustedProxies []string
@@ -31,22 +31,20 @@ type Handler struct {
 	buckets map[string]*rateBucket
 }
 
-func NewHandler(uuid string, caddy *caddy.Client, rateLimit int, trustedProxies []string, log *slog.Logger) *Handler {
+func NewHandler(secret string, caddy *caddy.Client, rateLimit int, trustedProxies []string, log *slog.Logger) *Handler {
 	h := &Handler{
-		uuid:           uuid,
+		secret:         secret,
 		caddy:          caddy,
 		rateLimit:      rateLimit,
 		trustedProxies: trustedProxies,
 		log:            log,
 		buckets:        make(map[string]*rateBucket),
 	}
-	// Periodically clean up old rate buckets
 	go h.cleanBuckets()
 	return h
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Only handle /hello-its-me/* — anything else is not our concern
 	if !strings.HasPrefix(r.URL.Path, enrollPrefix) {
 		http.NotFound(w, r)
 		return
@@ -54,31 +52,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ip := h.extractIP(r)
 
-	// Rate limit BEFORE checking UUID — prevents enumeration timing attacks
+	// Rate limit BEFORE checking secret — prevents enumeration timing attacks
 	if !h.checkRateLimit(ip) {
 		h.log.Warn("enrollment rate limit exceeded", "ip", ip)
-		// Return 404 even on rate limit — reveal nothing
 		http.NotFound(w, r)
 		return
 	}
 
-	// Extract UUID from path — must be exactly /hello-its-me/<uuid> with no trailing segments
+	// Must be exactly /hello-its-me/<secret> with no trailing segments
 	segment := strings.TrimPrefix(r.URL.Path, enrollPrefix)
 	segment = strings.TrimSuffix(segment, "/")
 
-	// Any failure: wrong UUID, missing UUID, extra path segments — all return 404
-	if segment == "" || strings.Contains(segment, "/") || segment != h.uuid {
+	// Any failure: wrong secret, missing, extra segments — all return 404
+	if segment == "" || strings.Contains(segment, "/") || segment != h.secret {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Valid UUID — enroll the IP
-	cidr := ip + "/32"
+	// Valid secret — enroll the IP
+	parsed := net.ParseIP(ip)
+	prefix := "/32"
+	if parsed != nil && parsed.To4() == nil {
+		prefix = "/128"
+	}
+	cidr := ip + prefix
 
 	already, err := h.caddy.IsAllowed(ip)
 	if err != nil {
 		h.log.Error("checking allowlist", "err", err)
-		http.NotFound(w, r) // still 404 — don't leak internal errors
+		http.NotFound(w, r)
 		return
 	}
 
@@ -103,20 +105,26 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) extractIP(r *http.Request) string {
-	if len(h.trustedProxies) > 0 {
-		remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+	remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+	// 127.0.0.1 is always trusted — the sidecar always runs behind Caddy on localhost.
+	trusted := remoteIP == "127.0.0.1"
+	if !trusted {
 		for _, cidr := range h.trustedProxies {
 			if cidrContains(cidr, remoteIP) {
-				if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-					// Take the leftmost (client) IP
-					parts := strings.Split(xff, ",")
-					return strings.TrimSpace(parts[0])
-				}
+				trusted = true
+				break
 			}
 		}
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
+
+	if trusted {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	return remoteIP
 }
 
 func (h *Handler) checkRateLimit(ip string) bool {

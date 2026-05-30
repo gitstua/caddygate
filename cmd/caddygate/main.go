@@ -72,7 +72,7 @@ func main() {
 
 	// Enrollment HTTP server
 	enrollHandler := enrollment.NewHandler(
-		cfg.EnrollmentUUID,
+		cfg.EnrollmentSecret,
 		caddyClient,
 		cfg.EnrollRateLimit,
 		cfg.TrustedProxies,
@@ -80,7 +80,7 @@ func main() {
 	)
 
 	// Admin page server (LAN-only, not routed through Caddy)
-	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentUUID, caddyClient, log)
+	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentSecret, caddyClient, log)
 	adminSrv := &http.Server{
 		Addr:         cfg.AdminPageAddr,
 		Handler:      adminHandler,

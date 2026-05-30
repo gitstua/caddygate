@@ -8,15 +8,15 @@ import (
 )
 
 type Config struct {
-	BaseDomain      string
-	EnrollmentUUID  string
-	InitialCIDRs    []string
-	TrustedProxies  []string
-	AdminSocket     string
-	EnrollRateLimit int
-	LogLevel        string
-	ListenAddr      string
-	AdminPageAddr   string
+	BaseDomain       string
+	EnrollmentSecret string
+	InitialCIDRs     []string
+	TrustedProxies   []string
+	AdminSocket      string
+	EnrollRateLimit  int
+	LogLevel         string
+	ListenAddr       string
+	AdminPageAddr    string
 }
 
 func Load() (*Config, error) {
@@ -33,9 +33,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("CADDYGATE_BASE_DOMAIN is required")
 	}
 
-	c.EnrollmentUUID = os.Getenv("CADDYGATE_ENROLLMENT_UUID")
-	if c.EnrollmentUUID == "" {
-		return nil, fmt.Errorf("CADDYGATE_ENROLLMENT_UUID is required")
+	c.EnrollmentSecret = os.Getenv("CADDYGATE_ENROLLMENT_SECRET")
+	if c.EnrollmentSecret == "" {
+		c.EnrollmentSecret = os.Getenv("CADDYGATE_ENROLLMENT_UUID") // legacy name
+	}
+	if c.EnrollmentSecret == "" {
+		return nil, fmt.Errorf("CADDYGATE_ENROLLMENT_SECRET is required")
 	}
 
 	if raw := os.Getenv("CADDYGATE_INITIAL_CIDRS"); raw != "" {

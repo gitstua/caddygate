@@ -3,7 +3,7 @@
 > [!CAUTION]
 > This project is experimental. Use at own risk as it will likely break. It does not work on MacOS with Docker as the networking stack presents the wrong IP to the filtering
 
-A zero-trust reverse proxy for Docker workloads. Caddy handles TLS (wildcard certs via DNS-01 ACME). A Go sidecar handles IP enrollment and Docker service discovery. No database — the allowlist lives directly in Caddy's config and survives restarts.
+A zero-trust reverse proxy for Docker workloads. Caddy handles TLS (on-demand certs via DNS-01 ACME). A Go sidecar handles IP enrollment and Docker service discovery. No database — the allowlist lives directly in Caddy's config and survives restarts.
 
 All traffic is denied by default. Users enroll their IP by visiting a secret URL. Docker containers are discovered automatically and get a subdomain — no config edits needed.
 
@@ -56,7 +56,7 @@ Create `.env`:
 CADDYGATE_BASE_DOMAIN=apps.example.com
 CADDYGATE_DNS_PROVIDER=cloudflare
 CADDYGATE_DNS_API_TOKEN=your-dns-api-token-here
-CADDYGATE_ENROLLMENT_UUID=        # generate: python3 -c "import uuid; print(uuid.uuid4())"
+CADDYGATE_ENROLLMENT_SECRET=      # generate: python3 -c "import uuid; print(uuid.uuid4())"
 CADDYGATE_INITIAL_CIDRS=203.0.113.42/32    # your current IP — prevents lockout on first boot
 ```
 
@@ -68,17 +68,17 @@ Your DNS provider must be pointed at this machine. Point a wildcard DNS record `
 docker compose up -d
 ```
 
-Caddy will provision a wildcard TLS certificate for `*.apps.example.com` automatically via DNS challenge. This takes 30–60 seconds on first boot.
+Caddy provisions TLS certificates on demand via DNS-01 ACME — each subdomain gets its own cert the first time it is accessed. No pre-provisioning needed.
 
 **4. Enroll your IP**
 
-Share this URL with anyone who should have access — visiting it enrolls their IP:
+Open the admin page on your LAN and scan the QR code with your mobile device:
 
 ```
-https://apps.example.com/hello-its-me/<your-uuid>
+http://<host-ip>:7080
 ```
 
-Keep the UUID private — it is the master key to your allowlist.
+The enrollment secret URL is never displayed publicly. Keep it private — anyone with it can add their IP to your allowlist.
 
 **5. Add an app**
 
@@ -155,7 +155,7 @@ All config via `.env`:
 | `CADDYGATE_BASE_DOMAIN` | — | Wildcard domain, e.g. `apps.example.com` |
 | `CADDYGATE_DNS_PROVIDER` | — | `cloudflare`, `route53`, `azure`, etc. |
 | `CADDYGATE_DNS_API_TOKEN` | — | DNS provider credential |
-| `CADDYGATE_ENROLLMENT_UUID` | — | UUID for the enrollment URL |
+| `CADDYGATE_ENROLLMENT_SECRET` | — | Secret for the enrollment URL (keep private) |
 | `CADDYGATE_INITIAL_CIDRS` | — | Comma-separated CIDRs pre-seeded on startup |
 | `CADDYGATE_TRUSTED_PROXIES` | `""` | CIDRs to trust for `X-Forwarded-For` |
 | `CADDYGATE_ENROLL_RATE_LIMIT` | `10` | Max enrollment attempts/min per IP |
@@ -166,15 +166,16 @@ All config via `.env`:
 
 ---
 
-## Rotating the enrollment UUID
+## Rotating the enrollment secret
 
 To revoke enrollment access (existing IPs remain, new ones can't enroll via the old URL):
 
 ```sh
-# Generate a new UUID
+# Generate a new secret
 python3 -c "import uuid; print(uuid.uuid4())"
 
-# Update .env, then restart only the sidecar (Caddy keeps running, allowlist unaffected)
+# Update CADDYGATE_ENROLLMENT_SECRET in .env, then restart only the sidecar
+# (Caddy keeps running, allowlist unaffected)
 docker compose restart caddygate
 ```
 
@@ -203,7 +204,7 @@ docker exec <caddygate-container> \
 | TLS certificates | `caddy_data` Docker volume | Yes |
 | Enrolled IPs | Caddy autosave in `caddy_config` via `--resume` | Yes |
 | Discovered routes | Caddy autosave; re-synced from Docker on startup | Yes |
-| Enrollment UUID | `.env` file | Yes |
+| Enrollment secret | `.env` file | Yes |
 
 No external database. No SQLite. No Postgres.
 
@@ -211,8 +212,8 @@ No external database. No SQLite. No Postgres.
 
 ## Security notes
 
-- All unknown paths (including wrong or missing UUIDs at `/hello-its-me/`) return `404` — identical to any unknown route. No body, no indication the endpoint exists.
-- The UUID is redacted from Caddy access logs before writing to disk.
+- All unknown paths (including wrong or missing secrets at `/hello-its-me/`) return `404` — identical to any unknown route. No body, no indication the endpoint exists.
+- The enrollment secret is redacted from Caddy access logs before writing to disk.
 - Rate limiting fires before UUID comparison — prevents timing-based enumeration.
 - XFF trust is disabled by default. Enable only if you have an upstream load balancer you control.
 - The Caddy Admin API is on a Unix socket only — never exposed on a network interface.
@@ -248,7 +249,7 @@ caddygate/
 │   ├── caddy/client.go            # Caddy Admin API client (unix socket)
 │   ├── config/config.go           # env var parsing
 │   ├── discovery/agent.go         # Docker event loop + route registration
-│   └── enrollment/handler.go      # /hello-its-me/{uuid} HTTP handler
+│   └── enrollment/handler.go      # /hello-its-me/{secret} HTTP handler
 ├── .github/workflows/publish.yml  # builds and publishes images to GHCR
 ├── caddy.json.tmpl                # base Caddy config (written on first boot)
 ├── entrypoint.sh                  # stamps template, starts Caddy + sidecar

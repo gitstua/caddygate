@@ -19,9 +19,9 @@ type Handler struct {
 	log       *slog.Logger
 }
 
-func NewHandler(baseDomain, uuid string, caddyClient *caddy.Client, log *slog.Logger) *Handler {
+func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, log *slog.Logger) *Handler {
 	return &Handler{
-		enrollURL: fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, uuid),
+		enrollURL: fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, secret),
 		caddy:     caddyClient,
 		log:       log,
 	}
