@@ -34,15 +34,11 @@ services:
       - "127.0.0.1:7080:7080"  # admin page — LAN only, do not expose to internet
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./caddy_data:/data
+      - ./caddy_config:/config
     env_file: .env
     networks:
       - caddygate
-
-volumes:
-  caddy_data:
-  caddy_config:
 
 networks:
   caddygate:
