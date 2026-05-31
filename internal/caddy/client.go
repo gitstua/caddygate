@@ -226,6 +226,35 @@ func (c *Client) getSubroutes() ([]json.RawMessage, string, error) {
 	return routes, path, nil
 }
 
+// GetManagedHosts returns the hostnames of all routes inside the remote_ip subroute.
+func (c *Client) GetManagedHosts() ([]string, error) {
+	subroutes, _, err := c.getSubroutes()
+	if err != nil {
+		return nil, err
+	}
+
+	var parsed []struct {
+		Match []struct {
+			Host []string `json:"host"`
+		} `json:"match"`
+	}
+	b, err := json.Marshal(subroutes)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &parsed); err != nil {
+		return nil, fmt.Errorf("unmarshal subroutes: %w", err)
+	}
+
+	var hosts []string
+	for _, route := range parsed {
+		for _, m := range route.Match {
+			hosts = append(hosts, m.Host...)
+		}
+	}
+	return hosts, nil
+}
+
 // UpsertRoute adds or replaces a reverse-proxy route inside the remote_ip subroute.
 // This ensures all container routes are gated behind the allowlist.
 func (c *Client) UpsertRoute(host, upstream, healthPath string) error {

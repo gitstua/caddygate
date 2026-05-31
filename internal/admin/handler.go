@@ -66,8 +66,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	hosts, err := h.caddy.GetManagedHosts()
+	if err != nil {
+		h.log.Warn("admin: could not fetch managed hosts", "err", err)
+	}
+
+	var hostItems strings.Builder
+	if len(hosts) == 0 {
+		hostItems.WriteString("<li>No services registered yet.</li>")
+	} else {
+		for _, host := range hosts {
+			fmt.Fprintf(&hostItems, `<li><a href="https://%s" target="_blank">%s</a></li>`, host, host)
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String())
+	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String(), hostItems.String())
 }
 
 const page = `<!DOCTYPE html>
@@ -88,6 +102,8 @@ const page = `<!DOCTYPE html>
   .label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
   .del { margin-left: 8px; border: none; background: none; color: #c00; cursor: pointer; font-size: 0.9rem; padding: 0 4px; border-radius: 3px; }
   .del:hover { background: #fdd; }
+  a { color: #0066cc; text-decoration: none; }
+  a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -99,6 +115,9 @@ const page = `<!DOCTYPE html>
   <div class="url">%s</div>
 
   <h2>Enrolled IPs</h2>
+  <ul>%s</ul>
+
+  <h2>Managed Services</h2>
   <ul>%s</ul>
 </body>
 </html>`
