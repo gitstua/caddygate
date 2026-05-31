@@ -69,6 +69,23 @@ func main() {
 		log.Warn("cert provision failed", "host", enrollHost, "err", err)
 	}
 
+	// Reconcile static services: remove IP-upstream routes that are no longer in config.
+	if existing, err := caddyClient.GetManagedServices(); err == nil {
+		wanted := make(map[string]bool, len(cfg.StaticServices))
+		for _, svc := range cfg.StaticServices {
+			wanted[svc.Name+"."+cfg.BaseDomain] = true
+		}
+		for _, svc := range existing {
+			if caddy.IsIPUpstream(svc.Upstream) && !wanted[svc.Host] {
+				if err := caddyClient.RemoveRoute(svc.Host); err != nil {
+					log.Warn("failed to remove stale static route", "host", svc.Host, "err", err)
+				} else {
+					log.Info("removed stale static service", "host", svc.Host)
+				}
+			}
+		}
+	}
+
 	// Seed static services defined via CADDYGATE_STATIC_SERVICES
 	for _, svc := range cfg.StaticServices {
 		host := svc.Name + "." + cfg.BaseDomain

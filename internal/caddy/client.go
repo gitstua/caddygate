@@ -376,6 +376,16 @@ func buildRoute(host, upstream, healthPath string) caddyRoute {
 	}
 }
 
+// IsIPUpstream reports whether the dial address uses an IP host (static service)
+// rather than a hostname (Docker container name).
+func IsIPUpstream(dial string) bool {
+	host, _, err := net.SplitHostPort(dial)
+	if err != nil {
+		host = dial
+	}
+	return net.ParseIP(host) != nil
+}
+
 func cidrContains(cidr, ip string) bool {
 	if cidr == ip || cidr == ip+"/32" || cidr == ip+"/128" {
 		return true

@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 
@@ -78,7 +77,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		for _, svc := range services {
 			badge, badgeClass := "docker", "badge-docker"
-			if isIPUpstream(svc.Upstream) {
+			if caddy.IsIPUpstream(svc.Upstream) {
 				badge, badgeClass = "static", "badge-static"
 			}
 			fmt.Fprintf(&hostItems,
@@ -89,16 +88,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String(), hostItems.String())
-}
-
-// isIPUpstream returns true if the upstream dial address uses an IP (static service)
-// rather than a hostname (Docker container name).
-func isIPUpstream(dial string) bool {
-	host, _, err := net.SplitHostPort(dial)
-	if err != nil {
-		host = dial
-	}
-	return net.ParseIP(host) != nil
 }
 
 const page = `<!DOCTYPE html>
