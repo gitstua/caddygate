@@ -147,6 +147,36 @@ func (c *Client) AddAllowedRange(cidr string) error {
 	return nil
 }
 
+// RemoveAllowedRange removes a CIDR from the allowlist in Caddy's live config.
+func (c *Client) RemoveAllowedRange(cidr string) error {
+	idx, err := c.findRemoteIPRouteIndex()
+	if err != nil {
+		return fmt.Errorf("find remote_ip route: %w", err)
+	}
+
+	existing, err := c.GetAllowedRanges()
+	if err != nil {
+		return fmt.Errorf("get existing ranges: %w", err)
+	}
+
+	updated := make([]string, 0, len(existing))
+	for _, r := range existing {
+		if r != cidr {
+			updated = append(updated, r)
+		}
+	}
+
+	path := fmt.Sprintf("/config/apps/http/servers/srv0/routes/%d/match/0/remote_ip/ranges", idx)
+	_, status, err := c.do("PATCH", path, updated)
+	if err != nil {
+		return err
+	}
+	if status != 200 {
+		return fmt.Errorf("caddy returned %d patching allowlist", status)
+	}
+	return nil
+}
+
 // ProvisionCert asks Caddy to obtain and manage a certificate for the given host.
 // This is needed because Caddy only auto-provisions certs for domains visible in
 // top-level route host matchers; domains inside subroutes are not scanned.

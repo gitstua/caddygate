@@ -28,6 +28,22 @@ func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, log *slog.
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost && r.URL.Path == "/delete" {
+		cidr := r.FormValue("ip")
+		if cidr == "" {
+			http.Error(w, "missing ip parameter", http.StatusBadRequest)
+			return
+		}
+		if err := h.caddy.RemoveAllowedRange(cidr); err != nil {
+			h.log.Error("admin: delete IP failed", "cidr", cidr, "err", err)
+			http.Error(w, "failed to delete IP", http.StatusInternalServerError)
+			return
+		}
+		h.log.Info("admin: deleted IP", "cidr", cidr)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
 	png, err := qrcode.Encode(h.enrollURL, qrcode.Medium, 256)
 	if err != nil {
 		h.log.Error("admin: qr encode failed", "err", err)
@@ -46,7 +62,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ipItems.WriteString("<li>No IPs enrolled yet.</li>")
 	} else {
 		for _, r := range ranges {
-			fmt.Fprintf(&ipItems, "<li><code>%s</code></li>", r)
+			fmt.Fprintf(&ipItems, `<li><code>%s</code><form method="POST" action="/delete" style="display:inline"><input type="hidden" name="ip" value="%s"><button type="submit" class="del">&#x2715;</button></form></li>`, r, r)
 		}
 	}
 
@@ -70,6 +86,8 @@ const page = `<!DOCTYPE html>
   li { font-family: monospace; font-size: 0.9rem; margin: 4px 0; }
   code { background: #f5f5f5; padding: 1px 5px; border-radius: 3px; }
   .label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .del { margin-left: 8px; border: none; background: none; color: #c00; cursor: pointer; font-size: 0.9rem; padding: 0 4px; border-radius: 3px; }
+  .del:hover { background: #fdd; }
 </style>
 </head>
 <body>
