@@ -213,16 +213,32 @@ func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken string) e
 	return nil
 }
 
-// ProvisionCert asks Caddy to obtain and manage a certificate for the given host.
-// This is needed because Caddy only auto-provisions certs for domains visible in
-// top-level route host matchers; domains inside subroutes are not scanned.
+// ProvisionCert ensures a host is in the first automation policy's subjects list,
+// causing Caddy to obtain and manage a certificate for it.
 func (c *Client) ProvisionCert(host string) error {
-	_, status, err := c.do("POST", "/certificates/automate", []string{host})
+	// Read current subjects
+	b, status, err := c.do("GET", "/config/apps/tls/automation/policies/0/subjects", nil)
 	if err != nil {
 		return err
 	}
-	if status != 200 && status != 201 {
-		return fmt.Errorf("caddy returned %d automating cert for %s", status, host)
+	var subjects []string
+	if status == 200 {
+		if err := json.Unmarshal(b, &subjects); err != nil {
+			return fmt.Errorf("unmarshal subjects: %w", err)
+		}
+	}
+	for _, s := range subjects {
+		if s == host {
+			return nil // already present
+		}
+	}
+	subjects = append(subjects, host)
+	_, status, err = c.do("PATCH", "/config/apps/tls/automation/policies/0/subjects", subjects)
+	if err != nil {
+		return err
+	}
+	if status != 200 {
+		return fmt.Errorf("caddy returned %d adding cert subject %s", status, host)
 	}
 	return nil
 }
