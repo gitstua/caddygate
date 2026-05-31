@@ -16,20 +16,6 @@ jobs:
       contents: read
       packages: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - provider: cloudflare
-            module: github.com/caddy-dns/cloudflare
-            primary: true
-          - provider: route53
-            module: github.com/caddy-dns/route53
-            primary: false
-          - provider: azure
-            module: github.com/caddy-dns/azure
-            primary: false
-
     steps:
       - uses: actions/checkout@v4.2.2
 
@@ -50,27 +36,10 @@ jobs:
         id: tags
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          PROVIDER="${{ matrix.provider }}"
-          REF="${{ github.ref }}"
-
-          # Every provider always gets a latest-<provider> tag
-          TAGS="${IMAGE}:latest-${PROVIDER}"
-
-          # On version tags, add versioned tags
-          if [[ "${REF}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            TAGS="${TAGS},${IMAGE}:${VERSION}-${PROVIDER}"
+          TAGS="${IMAGE}:latest"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAGS="${TAGS},${IMAGE}:${{ github.ref_name }}"
           fi
-
-          # Cloudflare is the default — also gets the unqualified tags
-          if [[ "${{ matrix.primary }}" == "true" ]]; then
-            TAGS="${TAGS},${IMAGE}:latest"
-            if [[ "${REF}" == refs/tags/v* ]]; then
-              VERSION="${{ github.ref_name }}"
-              TAGS="${TAGS},${IMAGE}:${VERSION}"
-            fi
-          fi
-
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
       - name: Build and push
@@ -81,6 +50,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            DNS_MODULE=${{ matrix.module }}
-          cache-from: type=gha,scope=${{ matrix.provider }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.provider }}
+            DNS_MODULE=github.com/caddy-dns/cloudflare
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -24,9 +24,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   caddygate:
-    image: ghcr.io/gitstua/caddygate:latest   # Cloudflare DNS
-    # image: ghcr.io/gitstua/caddygate:latest-route53   # AWS Route53
-    # image: ghcr.io/gitstua/caddygate:latest-azure     # Azure DNS
+    image: ghcr.io/gitstua/caddygate:latest
     restart: unless-stopped
     ports:
       - "80:80"
@@ -104,31 +102,11 @@ Port forwarding individual container ports from your router to your LAN is your 
 
 ---
 
-## Available images
-
-| Tag | DNS provider |
-|---|---|
-| `latest`, `latest-cloudflare` | Cloudflare |
-| `latest-route53` | AWS Route 53 |
-| `latest-azure` | Azure DNS |
-
-Versioned tags (`v1.2.3`, `v1.2.3-cloudflare`, etc.) are published on each release. Other DNS providers can be used by building from source — see the [DNS provider table](#dns-provider) below.
-
----
-
 ## DNS provider
 
-| Provider | Module | Image tag |
-|---|---|---|
-| Cloudflare | `github.com/caddy-dns/cloudflare` | `latest-cloudflare` |
-| Route53 | `github.com/caddy-dns/route53` | `latest-route53` |
-| Azure DNS | `github.com/caddy-dns/azure` | `latest-azure` |
-| Hetzner | `github.com/caddy-dns/hetzner` | build from source |
-| Namecheap | `github.com/caddy-dns/namecheap` | build from source |
+Cloudflare only. Create an API token scoped to *Zone / DNS / Edit* for the specific zone. Never use a Global API Key.
 
-**Token scoping (Cloudflare):** Create an API token scoped to *Zone / DNS / Edit* for the specific zone only. Never use a Global API Key.
-
-**Token scoping (Route53):** IAM policy restricted to `route53:ChangeResourceRecordSets` and `route53:ListResourceRecordSets` on the specific hosted zone ARN.
+Versioned tags (`v1.2.3`) are published on each release alongside `latest`.
 
 ---
 
