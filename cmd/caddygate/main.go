@@ -53,7 +53,8 @@ func main() {
 	caddyClient := caddy.NewClient(cfg.AdminSocket)
 	waitForCaddy(caddyClient, log)
 
-	// Seed initial CIDRs into Caddy allowlist
+	// Restore persisted allowlist first, then layer INITIAL_CIDRS on top.
+	allowlist.Load(caddyClient, cfg.AllowlistFile, log)
 	if len(cfg.InitialCIDRs) > 0 {
 		if err := allowlist.Seed(caddyClient, cfg.InitialCIDRs, log); err != nil {
 			log.Warn("allowlist seed partial failure", "err", err)
@@ -100,6 +101,22 @@ func main() {
 		}
 	}
 
+	// Persist allowlist to disk every minute so it survives restarts.
+	saveFn := func() { allowlist.Save(caddyClient, cfg.AllowlistFile, log) }
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				saveFn() // final save on shutdown
+				return
+			case <-ticker.C:
+				saveFn()
+			}
+		}
+	}()
+
 	// Start DDNS updater if enabled
 	if cfg.DDNSEnabled {
 		ddnsUpdater := ddns.New(cfg.BaseDomain, cfg.DNSAPIToken, cfg.DDNSInterval, log)
@@ -124,11 +141,12 @@ func main() {
 		caddyClient,
 		cfg.EnrollRateLimit,
 		cfg.TrustedProxies,
+		saveFn,
 		log,
 	)
 
 	// Admin page server (LAN-only, not routed through Caddy)
-	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentSecret, caddyClient, log)
+	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentSecret, caddyClient, saveFn, log)
 	adminSrv := &http.Server{
 		Addr:         cfg.AdminPageAddr,
 		Handler:      adminHandler,

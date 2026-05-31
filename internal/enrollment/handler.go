@@ -25,18 +25,20 @@ type Handler struct {
 	caddy          *caddy.Client
 	rateLimit      int
 	trustedProxies []string
+	saveAllowlist  func()
 	log            *slog.Logger
 
 	mu      sync.Mutex
 	buckets map[string]*rateBucket
 }
 
-func NewHandler(secret string, caddy *caddy.Client, rateLimit int, trustedProxies []string, log *slog.Logger) *Handler {
+func NewHandler(secret string, caddy *caddy.Client, rateLimit int, trustedProxies []string, saveAllowlist func(), log *slog.Logger) *Handler {
 	h := &Handler{
 		secret:         secret,
 		caddy:          caddy,
 		rateLimit:      rateLimit,
 		trustedProxies: trustedProxies,
+		saveAllowlist:  saveAllowlist,
 		log:            log,
 		buckets:        make(map[string]*rateBucket),
 	}
@@ -99,6 +101,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("enrollment: IP enrolled", "ip", ip)
+	h.saveAllowlist()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(successPage))

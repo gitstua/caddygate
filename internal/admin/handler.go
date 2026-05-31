@@ -14,16 +14,18 @@ import (
 
 // Handler serves the admin page showing the enrollment QR code and allowlist.
 type Handler struct {
-	enrollURL string
-	caddy     *caddy.Client
-	log       *slog.Logger
+	enrollURL     string
+	caddy         *caddy.Client
+	saveAllowlist func()
+	log           *slog.Logger
 }
 
-func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, log *slog.Logger) *Handler {
+func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, saveAllowlist func(), log *slog.Logger) *Handler {
 	return &Handler{
-		enrollURL: fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, secret),
-		caddy:     caddyClient,
-		log:       log,
+		enrollURL:     fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, secret),
+		caddy:         caddyClient,
+		saveAllowlist: saveAllowlist,
+		log:           log,
 	}
 }
 
@@ -40,6 +42,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.log.Info("admin: deleted IP", "cidr", cidr)
+		h.saveAllowlist()
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}

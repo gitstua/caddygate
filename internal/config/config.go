@@ -21,6 +21,7 @@ type Config struct {
 	StaticServices   []StaticService
 	TrustedProxies   []string
 	AdminSocket      string
+	AllowlistFile    string
 	EnrollRateLimit  int
 	LogLevel         string
 	ListenAddr       string
@@ -34,6 +35,7 @@ type Config struct {
 func Load() (*Config, error) {
 	c := &Config{
 		AdminSocket:     getEnv("CADDYGATE_ADMIN_SOCKET", "/run/caddy/admin.sock"),
+		AllowlistFile:   getEnv("CADDYGATE_ALLOWLIST_FILE", "/data/caddygate-allowlist.json"),
 		EnrollRateLimit: 10,
 		LogLevel:        getEnv("CADDYGATE_LOG_LEVEL", "info"),
 		ListenAddr:      getEnv("CADDYGATE_LISTEN_ADDR", ":8081"),
