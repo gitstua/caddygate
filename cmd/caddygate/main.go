@@ -64,8 +64,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Enforce wildcard TLS policy and trigger immediate cert fetch.
-	if err := caddyClient.EnforceTLSPolicy(cfg.BaseDomain, cfg.DNSProvider, cfg.DNSAPIToken); err != nil {
+	// Enforce wildcard TLS policy with on-demand DNS-01 challenge.
+	listenAddr := cfg.ListenAddr
+	if len(listenAddr) > 0 && listenAddr[0] == ':' {
+		listenAddr = "127.0.0.1" + listenAddr
+	}
+	onDemandAskURL := "http://" + listenAddr + "/tls-check"
+	if err := caddyClient.EnforceTLSPolicy(cfg.BaseDomain, cfg.DNSProvider, cfg.DNSAPIToken, onDemandAskURL); err != nil {
 		log.Warn("could not enforce TLS policy", "err", err)
 	} else {
 		log.Info("wildcard TLS policy enforced", "cert", "*."+cfg.BaseDomain)

@@ -57,8 +57,15 @@
     },
     "tls": {
       "automation": {
+        "on_demand": {
+          "permission": {
+            "module": "http",
+            "endpoint": "http://127.0.0.1:8081/tls-check"
+          }
+        },
         "policies": [{
           "subjects": ["*.${CADDYGATE_BASE_DOMAIN}"],
+          "on_demand": true,
           "issuers": [{
             "module": "acme",
             "challenges": {

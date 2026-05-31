@@ -177,15 +177,22 @@ func (c *Client) RemoveAllowedRange(cidr string) error {
 	return nil
 }
 
-// EnforceTLSPolicy overwrites the TLS automation config with a single wildcard cert
-// for *.baseDomain. This covers all subdomains instantly without per-host provisioning,
-// and prevents scanners from triggering on-demand cert issuance for arbitrary names.
-func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken string) error {
+// EnforceTLSPolicy overwrites the TLS automation config with a wildcard DNS-01 policy
+// for *.baseDomain and enables on-demand TLS gated by the sidecar's /tls-check endpoint.
+// onDemandAskURL is the full URL Caddy calls to authorise each on-demand cert request.
+func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken, onDemandAskURL string) error {
 	policy := map[string]any{
 		"automation": map[string]any{
+			"on_demand": map[string]any{
+				"permission": map[string]any{
+					"module":   "http",
+					"endpoint": onDemandAskURL,
+				},
+			},
 			"policies": []map[string]any{
 				{
-					"subjects": []string{"*." + baseDomain},
+					"subjects":  []string{"*." + baseDomain},
+					"on_demand": true,
 					"issuers": []map[string]any{
 						{
 							"module": "acme",
@@ -203,9 +210,6 @@ func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken string) e
 			},
 		},
 	}
-	// Remove the on_demand block if it exists in the autosaved config.
-	// PATCH merges rather than replaces, so we must delete it explicitly.
-	c.do("DELETE", "/config/apps/tls/automation/on_demand", nil)
 
 	_, status, err := c.do("PATCH", "/config/apps/tls", policy)
 	if err != nil {
