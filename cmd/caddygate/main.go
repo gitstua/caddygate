@@ -151,7 +151,7 @@ func main() {
 	)
 
 	// Admin page server (LAN-only, not routed through Caddy)
-	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentSecret, caddyClient, saveFn, log)
+	adminHandler := admin.NewHandler(cfg.BaseDomain, cfg.EnrollmentSecret, caddyClient, cfg.CertStorageDir, saveFn, log)
 	adminSrv := &http.Server{
 		Addr:         cfg.AdminPageAddr,
 		Handler:      adminHandler,

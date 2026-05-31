@@ -22,6 +22,7 @@ type Config struct {
 	TrustedProxies   []string
 	AdminSocket      string
 	AllowlistFile    string
+	CertStorageDir   string
 	EnrollRateLimit  int
 	LogLevel         string
 	ListenAddr       string
@@ -36,6 +37,7 @@ func Load() (*Config, error) {
 	c := &Config{
 		AdminSocket:     getEnv("CADDYGATE_ADMIN_SOCKET", "/run/caddy/admin.sock"),
 		AllowlistFile:   getEnv("CADDYGATE_ALLOWLIST_FILE", "/data/caddygate-allowlist.json"),
+		CertStorageDir:  getEnv("CADDYGATE_CERT_STORAGE_DIR", "/data/caddy/certificates"),
 		EnrollRateLimit: 10,
 		LogLevel:        getEnv("CADDYGATE_LOG_LEVEL", "info"),
 		ListenAddr:      getEnv("CADDYGATE_LISTEN_ADDR", ":8081"),

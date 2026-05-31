@@ -1,11 +1,17 @@
 package admin
 
 import (
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 
@@ -14,19 +20,75 @@ import (
 
 // Handler serves the admin page showing the enrollment QR code and allowlist.
 type Handler struct {
-	enrollURL     string
-	caddy         *caddy.Client
-	saveAllowlist func()
-	log           *slog.Logger
+	enrollURL      string
+	caddy          *caddy.Client
+	certStorageDir string
+	saveAllowlist  func()
+	log            *slog.Logger
 }
 
-func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, saveAllowlist func(), log *slog.Logger) *Handler {
+func NewHandler(baseDomain, secret string, caddyClient *caddy.Client, certStorageDir string, saveAllowlist func(), log *slog.Logger) *Handler {
 	return &Handler{
-		enrollURL:     fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, secret),
-		caddy:         caddyClient,
-		saveAllowlist: saveAllowlist,
-		log:           log,
+		enrollURL:      fmt.Sprintf("https://enroll.%s/hello-its-me/%s", baseDomain, secret),
+		caddy:          caddyClient,
+		certStorageDir: certStorageDir,
+		saveAllowlist:  saveAllowlist,
+		log:            log,
 	}
+}
+
+type certInfo struct {
+	Host     string
+	Expiry   time.Time
+	DaysLeft int
+	Issuer   string
+}
+
+// loadCerts scans the Caddy certificate storage directory and returns metadata
+// for every cert found. Errors on individual certs are silently skipped.
+func loadCerts(dir string) []certInfo {
+	var certs []certInfo
+	issuers, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	for _, issuer := range issuers {
+		if !issuer.IsDir() {
+			continue
+		}
+		hostDirs, _ := os.ReadDir(filepath.Join(dir, issuer.Name()))
+		for _, hd := range hostDirs {
+			if !hd.IsDir() {
+				continue
+			}
+			crtPath := filepath.Join(dir, issuer.Name(), hd.Name(), hd.Name()+".crt")
+			data, err := os.ReadFile(crtPath)
+			if err != nil {
+				continue
+			}
+			block, _ := pem.Decode(data)
+			if block == nil {
+				continue
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				continue
+			}
+			host := cert.Subject.CommonName
+			if len(cert.DNSNames) > 0 {
+				host = strings.Join(cert.DNSNames, ", ")
+			}
+			daysLeft := int(time.Until(cert.NotAfter).Hours() / 24)
+			certs = append(certs, certInfo{
+				Host:     host,
+				Expiry:   cert.NotAfter,
+				DaysLeft: daysLeft,
+				Issuer:   cert.Issuer.CommonName,
+			})
+		}
+	}
+	sort.Slice(certs, func(i, j int) bool { return certs[i].Host < certs[j].Host })
+	return certs
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +151,26 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	certs := loadCerts(h.certStorageDir)
+	var certRows strings.Builder
+	if len(certs) == 0 {
+		certRows.WriteString(`<tr><td colspan="3" class="empty">No certificates yet.</td></tr>`)
+	} else {
+		for _, c := range certs {
+			expiryClass := "ok"
+			if c.DaysLeft < 10 {
+				expiryClass = "exp-critical"
+			} else if c.DaysLeft < 30 {
+				expiryClass = "exp-warn"
+			}
+			fmt.Fprintf(&certRows,
+				`<tr><td class="mono">%s</td><td class="mono %s">%s (%dd)</td><td class="issuer">%s</td></tr>`,
+				c.Host, expiryClass, c.Expiry.UTC().Format("2006-01-02"), c.DaysLeft, c.Issuer)
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String(), hostItems.String())
+	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String(), hostItems.String(), certRows.String())
 }
 
 const page = `<!DOCTYPE html>
@@ -100,7 +180,7 @@ const page = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CaddyGate Admin</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 60px auto; padding: 0 24px; color: #1a1a1a; }
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 24px; color: #1a1a1a; }
   h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 0; }
   h2 { font-size: 1.1rem; font-weight: 500; margin-top: 2rem; }
   img { display: block; margin: 16px 0; border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px; background: #fff; }
@@ -117,6 +197,15 @@ const page = `<!DOCTYPE html>
   .badge-docker { background: #dbeafe; color: #1e40af; }
   .badge-static { background: #dcfce7; color: #166534; }
   .upstream { color: #888; font-size: 0.8rem; margin-left: 8px; }
+  table { width: 100%%; border-collapse: collapse; font-size: 0.88rem; margin-top: 6px; }
+  th { text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px 4px 0; border-bottom: 1px solid #e0e0e0; }
+  td { padding: 5px 8px 5px 0; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .mono { font-family: monospace; }
+  .issuer { color: #888; font-size: 0.8rem; }
+  .empty { color: #888; font-style: italic; }
+  .ok { color: #166534; }
+  .exp-warn { color: #92400e; }
+  .exp-critical { color: #991b1b; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -132,5 +221,11 @@ const page = `<!DOCTYPE html>
 
   <h2>Managed Services</h2>
   <ul>%s</ul>
+
+  <h2>TLS Certificates</h2>
+  <table>
+    <thead><tr><th>Domain</th><th>Expires</th><th>Issuer</th></tr></thead>
+    <tbody>%s</tbody>
+  </table>
 </body>
 </html>`
