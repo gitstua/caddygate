@@ -25,6 +25,7 @@ type Config struct {
 	LogLevel         string
 	ListenAddr       string
 	AdminPageAddr    string
+	DNSProvider      string
 	DNSAPIToken      string
 	DDNSEnabled      bool
 	DDNSInterval     time.Duration
@@ -99,6 +100,7 @@ func Load() (*Config, error) {
 		c.EnrollRateLimit = n
 	}
 
+	c.DNSProvider = getEnv("CADDYGATE_DNS_PROVIDER", "cloudflare")
 	c.DNSAPIToken = os.Getenv("CADDYGATE_DNS_API_TOKEN")
 
 	if os.Getenv("CADDYGATE_DDNS_ENABLED") == "true" {

@@ -177,6 +177,41 @@ func (c *Client) RemoveAllowedRange(cidr string) error {
 	return nil
 }
 
+// EnforceTLSPolicy overwrites the TLS automation config to disable on-demand issuance,
+// ensuring scanners cannot trigger cert creation for arbitrary subdomains regardless
+// of what the autosaved config contains.
+func (c *Client) EnforceTLSPolicy(dnsProvider, dnsAPIToken string) error {
+	policy := map[string]any{
+		"automation": map[string]any{
+			"policies": []map[string]any{
+				{
+					"issuers": []map[string]any{
+						{
+							"module": "acme",
+							"challenges": map[string]any{
+								"dns": map[string]any{
+									"provider": map[string]any{
+										"name":      dnsProvider,
+										"api_token": dnsAPIToken,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, status, err := c.do("PATCH", "/config/apps/tls", policy)
+	if err != nil {
+		return err
+	}
+	if status != 200 {
+		return fmt.Errorf("caddy returned %d enforcing TLS policy", status)
+	}
+	return nil
+}
+
 // ProvisionCert asks Caddy to obtain and manage a certificate for the given host.
 // This is needed because Caddy only auto-provisions certs for domains visible in
 // top-level route host matchers; domains inside subroutes are not scanned.

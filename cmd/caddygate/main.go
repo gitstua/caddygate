@@ -63,6 +63,14 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Enforce no-on-demand TLS policy — overrides whatever is in the autosaved config.
+	// This prevents internet scanners from triggering cert issuance for arbitrary subdomains.
+	if err := caddyClient.EnforceTLSPolicy(cfg.DNSProvider, cfg.DNSAPIToken); err != nil {
+		log.Warn("could not enforce TLS policy", "err", err)
+	} else {
+		log.Info("TLS policy enforced: on-demand issuance disabled")
+	}
+
 	// Provision cert for the enrollment subdomain upfront.
 	enrollHost := "enroll." + cfg.BaseDomain
 	if err := caddyClient.ProvisionCert(enrollHost); err != nil {
