@@ -203,6 +203,10 @@ func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken string) e
 			},
 		},
 	}
+	// Remove the on_demand block if it exists in the autosaved config.
+	// PATCH merges rather than replaces, so we must delete it explicitly.
+	c.do("DELETE", "/config/apps/tls/automation/on_demand", nil)
+
 	_, status, err := c.do("PATCH", "/config/apps/tls", policy)
 	if err != nil {
 		return err
