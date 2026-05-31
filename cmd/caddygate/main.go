@@ -62,6 +62,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Seed static services defined via CADDYGATE_STATIC_SERVICES
+	for _, svc := range cfg.StaticServices {
+		host := svc.Name + "." + cfg.BaseDomain
+		if err := caddyClient.UpsertRoute(host, svc.Upstream, ""); err != nil {
+			log.Warn("static service seed failed", "host", host, "err", err)
+		} else {
+			log.Info("registered static service", "host", host, "upstream", svc.Upstream)
+		}
+	}
+
 	// Start Docker discovery agent
 	agent := discovery.NewAgent(cfg.BaseDomain, caddyClient, log)
 	go func() {

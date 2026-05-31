@@ -2,15 +2,22 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 )
 
+type StaticService struct {
+	Name     string // subdomain
+	Upstream string // host:port dial address
+}
+
 type Config struct {
 	BaseDomain       string
 	EnrollmentSecret string
 	InitialCIDRs     []string
+	StaticServices   []StaticService
 	TrustedProxies   []string
 	AdminSocket      string
 	EnrollRateLimit  int
@@ -50,6 +57,27 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if raw := os.Getenv("CADDYGATE_STATIC_SERVICES"); raw != "" {
+		for _, entry := range strings.Split(raw, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			name, upstream, ok := strings.Cut(entry, "=")
+			if !ok || strings.TrimSpace(name) == "" || strings.TrimSpace(upstream) == "" {
+				return nil, fmt.Errorf("CADDYGATE_STATIC_SERVICES: invalid entry %q, expected name=upstream", entry)
+			}
+			dial, err := parseDialAddress(strings.TrimSpace(upstream))
+			if err != nil {
+				return nil, fmt.Errorf("CADDYGATE_STATIC_SERVICES: invalid upstream in %q: %w", entry, err)
+			}
+			c.StaticServices = append(c.StaticServices, StaticService{
+				Name:     strings.TrimSpace(name),
+				Upstream: dial,
+			})
+		}
+	}
+
 	if raw := os.Getenv("CADDYGATE_TRUSTED_PROXIES"); raw != "" {
 		for _, cidr := range strings.Split(raw, " ") {
 			cidr = strings.TrimSpace(cidr)
@@ -75,4 +103,19 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseDialAddress converts a URL like http://host:port to a bare host:port dial string.
+func parseDialAddress(raw string) (string, error) {
+	if !strings.Contains(raw, "://") {
+		return raw, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("could not extract host from %q", raw)
+	}
+	return u.Host, nil
 }
