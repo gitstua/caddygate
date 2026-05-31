@@ -63,12 +63,14 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Enforce wildcard TLS policy — obtains *.baseDomain covering all subdomains,
-	// and disables on-demand issuance so scanners can't trigger arbitrary certs.
+	// Enforce wildcard TLS policy and trigger immediate cert fetch.
 	if err := caddyClient.EnforceTLSPolicy(cfg.BaseDomain, cfg.DNSProvider, cfg.DNSAPIToken); err != nil {
 		log.Warn("could not enforce TLS policy", "err", err)
 	} else {
 		log.Info("wildcard TLS policy enforced", "cert", "*."+cfg.BaseDomain)
+	}
+	if err := caddyClient.ProvisionCert("*." + cfg.BaseDomain); err != nil {
+		log.Warn("could not provision wildcard cert", "err", err)
 	}
 
 	// Reconcile static services: remove IP-upstream routes that are no longer in config.
