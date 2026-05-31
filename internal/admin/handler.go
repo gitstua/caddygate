@@ -9,7 +9,7 @@ import (
 
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/yourorg/caddygate/internal/caddy"
+	"github.com/gitstua/caddygate/internal/caddy"
 )
 
 // Handler serves the admin page showing the enrollment QR code and allowlist.

@@ -1,4 +1,4 @@
-module github.com/yourorg/caddygate
+module github.com/gitstua/caddygate
 
 go 1.22
 

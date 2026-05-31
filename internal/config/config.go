@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type StaticService struct {
@@ -24,6 +25,9 @@ type Config struct {
 	LogLevel         string
 	ListenAddr       string
 	AdminPageAddr    string
+	DNSAPIToken      string
+	DDNSEnabled      bool
+	DDNSInterval     time.Duration
 }
 
 func Load() (*Config, error) {
@@ -93,6 +97,23 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("CADDYGATE_ENROLL_RATE_LIMIT must be an integer: %w", err)
 		}
 		c.EnrollRateLimit = n
+	}
+
+	c.DNSAPIToken = os.Getenv("CADDYGATE_DNS_API_TOKEN")
+
+	if os.Getenv("CADDYGATE_DDNS_ENABLED") == "true" {
+		if c.DNSAPIToken == "" {
+			return nil, fmt.Errorf("CADDYGATE_DDNS_ENABLED requires CADDYGATE_DNS_API_TOKEN")
+		}
+		c.DDNSEnabled = true
+		c.DDNSInterval = 5 * time.Minute
+		if raw := os.Getenv("CADDYGATE_DDNS_INTERVAL"); raw != "" {
+			d, err := time.ParseDuration(raw)
+			if err != nil {
+				return nil, fmt.Errorf("CADDYGATE_DDNS_INTERVAL invalid duration: %w", err)
+			}
+			c.DDNSInterval = d
+		}
 	}
 
 	return c, nil

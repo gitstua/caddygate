@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yourorg/caddygate/internal/caddy"
+	"github.com/gitstua/caddygate/internal/caddy"
 )
 
 const enrollPrefix = "/hello-its-me/"

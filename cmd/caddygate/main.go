@@ -10,12 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yourorg/caddygate/internal/admin"
-	"github.com/yourorg/caddygate/internal/allowlist"
-	"github.com/yourorg/caddygate/internal/caddy"
-	"github.com/yourorg/caddygate/internal/config"
-	"github.com/yourorg/caddygate/internal/discovery"
-	"github.com/yourorg/caddygate/internal/enrollment"
+	"github.com/gitstua/caddygate/internal/admin"
+	"github.com/gitstua/caddygate/internal/allowlist"
+	"github.com/gitstua/caddygate/internal/caddy"
+	"github.com/gitstua/caddygate/internal/config"
+	"github.com/gitstua/caddygate/internal/ddns"
+	"github.com/gitstua/caddygate/internal/discovery"
+	"github.com/gitstua/caddygate/internal/enrollment"
 )
 
 func main() {
@@ -62,6 +63,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Provision cert for the enrollment subdomain upfront.
+	enrollHost := "enroll." + cfg.BaseDomain
+	if err := caddyClient.ProvisionCert(enrollHost); err != nil {
+		log.Warn("cert provision failed", "host", enrollHost, "err", err)
+	}
+
 	// Seed static services defined via CADDYGATE_STATIC_SERVICES
 	for _, svc := range cfg.StaticServices {
 		host := svc.Name + "." + cfg.BaseDomain
@@ -70,6 +77,19 @@ func main() {
 		} else {
 			log.Info("registered static service", "host", host, "upstream", svc.Upstream)
 		}
+		if err := caddyClient.ProvisionCert(host); err != nil {
+			log.Warn("cert provision failed", "host", host, "err", err)
+		}
+	}
+
+	// Start DDNS updater if enabled
+	if cfg.DDNSEnabled {
+		ddnsUpdater := ddns.New(cfg.BaseDomain, cfg.DNSAPIToken, cfg.DDNSInterval, log)
+		go func() {
+			if err := ddnsUpdater.Run(ctx); err != nil && err != context.Canceled {
+				log.Error("ddns updater exited", "err", err)
+			}
+		}()
 	}
 
 	// Start Docker discovery agent

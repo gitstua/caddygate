@@ -57,14 +57,7 @@
     },
     "tls": {
       "automation": {
-        "on_demand": {
-          "permission": {
-            "module": "http",
-            "endpoint": "http://localhost:8081/tls-check"
-          }
-        },
         "policies": [{
-          "on_demand": true,
           "issuers": [{
             "module": "acme",
             "challenges": {

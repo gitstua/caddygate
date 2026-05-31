@@ -3,9 +3,9 @@
 > [!CAUTION]
 > This project is experimental. Use at own risk as it will likely break. It does not work on MacOS with Docker as the networking stack presents the wrong IP to the filtering
 
-A zero-trust reverse proxy for Docker workloads. Caddy handles TLS (on-demand certs via DNS-01 ACME). A Go sidecar handles IP enrollment and Docker service discovery. No database — the allowlist lives directly in Caddy's config and survives restarts.
+A zero-trust reverse proxy for Docker workloads and local network services. Caddy handles TLS (certs provisioned at startup via DNS-01 ACME). A Go sidecar handles IP enrollment, Docker service discovery, and optional DDNS updates. No database — the allowlist lives directly in Caddy's config and survives restarts.
 
-All traffic is denied by default. Users enroll their IP by visiting a secret URL. Docker containers are discovered automatically and get a subdomain — no config edits needed.
+All traffic is denied by default. Users enroll their IP by visiting a secret URL. Docker containers are discovered automatically and get a subdomain — no config edits needed. Non-Docker services on your local network can also be proxied via environment config.
 
 ---
 
@@ -63,7 +63,7 @@ Your DNS provider must be pointed at this machine. Point a wildcard DNS record `
 docker compose up -d
 ```
 
-Caddy provisions TLS certificates on demand via DNS-01 ACME — each subdomain gets its own cert the first time it is accessed. No pre-provisioning needed.
+Caddy provisions TLS certificates at startup via DNS-01 ACME for all known subdomains (enrollment URL, static services, and Docker containers as they start). No on-demand cert issuance — only registered subdomains get certificates.
 
 **4. Enroll your IP**
 
@@ -73,7 +73,7 @@ Open the admin page on your LAN and scan the QR code with your mobile device:
 http://<host-ip>:7080
 ```
 
-The enrollment secret URL is never displayed publicly. Keep it private — anyone with it can add their IP to your allowlist.
+The admin page also shows all enrolled IPs (with a delete button) and all managed service URLs. The enrollment secret URL is never displayed publicly. Keep it private — anyone with it can add their IP to your allowlist.
 
 **5. Add an app**
 
@@ -100,11 +100,23 @@ The `caddygate.name` label is all that's needed to enable discovery. Within seco
 
 Port forwarding individual container ports from your router to your LAN is your responsibility. CaddyGate only manages the HTTPS reverse proxy layer.
 
+**5. Add non-Docker services (optional)**
+
+To proxy local network services that aren't Docker containers (e.g. a NAS, Home Assistant, or any `host:port`), set `CADDYGATE_STATIC_SERVICES` in your `.env`:
+
+```sh
+CADDYGATE_STATIC_SERVICES=homeassistant=http://192.168.50.193:8123,nas=http://192.168.50.10:5000
+```
+
+Each entry is `name=upstream` where upstream is a URL or bare `host:port`. The subdomain `name.apps.example.com` is registered and its cert provisioned at startup. These services appear alongside Docker-discovered services on the admin page.
+
 ---
 
 ## DNS provider
 
 Cloudflare only. Create an API token scoped to *Zone / DNS / Edit* for the specific zone. Never use a Global API Key.
+
+The same token is used for both ACME DNS challenges and optional DDNS updates — no separate credentials needed.
 
 Versioned tags (`v1.2.3`) are published on each release alongside `latest`.
 
@@ -128,10 +140,12 @@ All config via `.env`:
 | Variable | Default | Description |
 |---|---|---|
 | `CADDYGATE_BASE_DOMAIN` | — | Wildcard domain, e.g. `apps.example.com` |
-| `CADDYGATE_DNS_PROVIDER` | — | `cloudflare`, `route53`, `azure`, etc. |
-| `CADDYGATE_DNS_API_TOKEN` | — | DNS provider credential |
+| `CADDYGATE_DNS_API_TOKEN` | — | Cloudflare API token (Zone / DNS / Edit) |
 | `CADDYGATE_ENROLLMENT_SECRET` | — | Secret for the enrollment URL (keep private) |
 | `CADDYGATE_INITIAL_CIDRS` | — | Comma-separated CIDRs pre-seeded on startup |
+| `CADDYGATE_STATIC_SERVICES` | — | Comma-separated `name=upstream` pairs for non-Docker services |
+| `CADDYGATE_DDNS_ENABLED` | `false` | Set `true` to keep `*.basedomain` pointed at the current public IP |
+| `CADDYGATE_DDNS_INTERVAL` | `5m` | How often to check and update the DNS record |
 | `CADDYGATE_TRUSTED_PROXIES` | `""` | CIDRs to trust for `X-Forwarded-For` |
 | `CADDYGATE_ENROLL_RATE_LIMIT` | `10` | Max enrollment attempts/min per IP |
 | `CADDYGATE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
@@ -154,21 +168,7 @@ python3 -c "import uuid; print(uuid.uuid4())"
 docker compose restart caddygate
 ```
 
-To remove an IP from the allowlist:
-
-```sh
-# View current allowlist
-docker exec <caddygate-container> \
-  curl --unix-socket /run/caddy/admin.sock \
-  http://caddy/config/apps/http/servers/srv0/routes/1/match/0/remote_ip/ranges
-
-# Update the list (replace with the array minus the IP to remove)
-docker exec <caddygate-container> \
-  curl --unix-socket /run/caddy/admin.sock \
-  -X PATCH -H "Content-Type: application/json" \
-  http://caddy/config/apps/http/servers/srv0/routes/1/match/0/remote_ip/ranges \
-  -d '["203.0.113.1/32"]'
-```
+To remove an IP from the allowlist, click the ✕ button next to it on the admin page (`http://<host-ip>:7080`).
 
 ---
 
@@ -220,9 +220,11 @@ docker compose build --build-arg DNS_MODULE=github.com/caddy-dns/route53
 caddygate/
 ├── cmd/caddygate/main.go          # entrypoint — wires everything together
 ├── internal/
+│   ├── admin/handler.go           # admin page: QR code, IP list, service links
 │   ├── allowlist/seed.go          # seeds initial CIDRs into Caddy on startup
 │   ├── caddy/client.go            # Caddy Admin API client (unix socket)
 │   ├── config/config.go           # env var parsing
+│   ├── ddns/updater.go            # optional Cloudflare DDNS updater
 │   ├── discovery/agent.go         # Docker event loop + route registration
 │   └── enrollment/handler.go      # /hello-its-me/{secret} HTTP handler
 ├── .github/workflows/publish.yml  # builds and publishes images to GHCR

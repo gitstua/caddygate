@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/yourorg/caddygate/internal/caddy"
+	"github.com/gitstua/caddygate/internal/caddy"
 )
 
 // Seed pushes the initial set of CIDRs into Caddy's allowlist.
