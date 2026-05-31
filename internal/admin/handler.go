@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 
@@ -66,22 +67,38 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	hosts, err := h.caddy.GetManagedHosts()
+	services, err := h.caddy.GetManagedServices()
 	if err != nil {
-		h.log.Warn("admin: could not fetch managed hosts", "err", err)
+		h.log.Warn("admin: could not fetch managed services", "err", err)
 	}
 
 	var hostItems strings.Builder
-	if len(hosts) == 0 {
+	if len(services) == 0 {
 		hostItems.WriteString("<li>No services registered yet.</li>")
 	} else {
-		for _, host := range hosts {
-			fmt.Fprintf(&hostItems, `<li><a href="https://%s" target="_blank">%s</a></li>`, host, host)
+		for _, svc := range services {
+			badge, badgeClass := "docker", "badge-docker"
+			if isIPUpstream(svc.Upstream) {
+				badge, badgeClass = "static", "badge-static"
+			}
+			fmt.Fprintf(&hostItems,
+				`<li><a href="https://%s" target="_blank">%s</a><span class="badge %s">%s</span><span class="upstream">→ %s</span></li>`,
+				svc.Host, svc.Host, badgeClass, badge, svc.Upstream)
 		}
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, page, qrDataURI, h.enrollURL, ipItems.String(), hostItems.String())
+}
+
+// isIPUpstream returns true if the upstream dial address uses an IP (static service)
+// rather than a hostname (Docker container name).
+func isIPUpstream(dial string) bool {
+	host, _, err := net.SplitHostPort(dial)
+	if err != nil {
+		host = dial
+	}
+	return net.ParseIP(host) != nil
 }
 
 const page = `<!DOCTYPE html>
@@ -104,6 +121,10 @@ const page = `<!DOCTYPE html>
   .del:hover { background: #fdd; }
   a { color: #0066cc; text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .badge { font-size: 0.65rem; font-family: system-ui, sans-serif; padding: 1px 6px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+  .badge-docker { background: #dbeafe; color: #1e40af; }
+  .badge-static { background: #dcfce7; color: #166534; }
+  .upstream { color: #888; font-size: 0.8rem; margin-left: 8px; }
 </style>
 </head>
 <body>

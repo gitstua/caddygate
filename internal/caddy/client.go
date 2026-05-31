@@ -226,8 +226,14 @@ func (c *Client) getSubroutes() ([]json.RawMessage, string, error) {
 	return routes, path, nil
 }
 
-// GetManagedHosts returns the hostnames of all routes inside the remote_ip subroute.
-func (c *Client) GetManagedHosts() ([]string, error) {
+// ManagedService holds display info for a proxied service.
+type ManagedService struct {
+	Host     string
+	Upstream string // bare host:port dial address
+}
+
+// GetManagedServices returns all routes inside the remote_ip subroute with their upstreams.
+func (c *Client) GetManagedServices() ([]ManagedService, error) {
 	subroutes, _, err := c.getSubroutes()
 	if err != nil {
 		return nil, err
@@ -237,6 +243,11 @@ func (c *Client) GetManagedHosts() ([]string, error) {
 		Match []struct {
 			Host []string `json:"host"`
 		} `json:"match"`
+		Handle []struct {
+			Upstreams []struct {
+				Dial string `json:"dial"`
+			} `json:"upstreams"`
+		} `json:"handle"`
 	}
 	b, err := json.Marshal(subroutes)
 	if err != nil {
@@ -246,13 +257,19 @@ func (c *Client) GetManagedHosts() ([]string, error) {
 		return nil, fmt.Errorf("unmarshal subroutes: %w", err)
 	}
 
-	var hosts []string
+	var services []ManagedService
 	for _, route := range parsed {
+		upstream := ""
+		if len(route.Handle) > 0 && len(route.Handle[0].Upstreams) > 0 {
+			upstream = route.Handle[0].Upstreams[0].Dial
+		}
 		for _, m := range route.Match {
-			hosts = append(hosts, m.Host...)
+			for _, host := range m.Host {
+				services = append(services, ManagedService{Host: host, Upstream: upstream})
+			}
 		}
 	}
-	return hosts, nil
+	return services, nil
 }
 
 // UpsertRoute adds or replaces a reverse-proxy route inside the remote_ip subroute.
