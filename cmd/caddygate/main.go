@@ -168,14 +168,34 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/hello-its-me/", enrollHandler)
-	// Caddy on-demand TLS permission check — only allow *.BASE_DOMAIN
+	// Caddy on-demand TLS permission check.
+	// Only issue certs for the enrollment subdomain and domains with a registered route.
+	// This prevents scanners from exhausting Let's Encrypt quota by hitting random subdomains.
 	mux.HandleFunc("/tls-check", func(w http.ResponseWriter, r *http.Request) {
 		domain := r.URL.Query().Get("domain")
-		if strings.HasSuffix(domain, "."+cfg.BaseDomain) {
-			w.WriteHeader(http.StatusOK)
-		} else {
+		if !strings.HasSuffix(domain, "."+cfg.BaseDomain) {
 			w.WriteHeader(http.StatusForbidden)
+			return
 		}
+		// Enrollment subdomain is always valid (hardcoded in admin.NewHandler).
+		if domain == "enroll."+cfg.BaseDomain {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Allow only domains that have a registered route in Caddy.
+		services, err := caddyClient.GetManagedServices()
+		if err != nil {
+			log.Warn("tls-check: failed to list managed services", "err", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		for _, svc := range services {
+			if svc.Host == domain {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusForbidden)
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
