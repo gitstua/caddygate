@@ -177,14 +177,15 @@ func (c *Client) RemoveAllowedRange(cidr string) error {
 	return nil
 }
 
-// EnforceTLSPolicy overwrites the TLS automation config to disable on-demand issuance,
-// ensuring scanners cannot trigger cert creation for arbitrary subdomains regardless
-// of what the autosaved config contains.
-func (c *Client) EnforceTLSPolicy(dnsProvider, dnsAPIToken string) error {
+// EnforceTLSPolicy overwrites the TLS automation config with a single wildcard cert
+// for *.baseDomain. This covers all subdomains instantly without per-host provisioning,
+// and prevents scanners from triggering on-demand cert issuance for arbitrary names.
+func (c *Client) EnforceTLSPolicy(baseDomain, dnsProvider, dnsAPIToken string) error {
 	policy := map[string]any{
 		"automation": map[string]any{
 			"policies": []map[string]any{
 				{
+					"subjects": []string{"*." + baseDomain},
 					"issuers": []map[string]any{
 						{
 							"module": "acme",

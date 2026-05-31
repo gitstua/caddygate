@@ -63,18 +63,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Enforce no-on-demand TLS policy — overrides whatever is in the autosaved config.
-	// This prevents internet scanners from triggering cert issuance for arbitrary subdomains.
-	if err := caddyClient.EnforceTLSPolicy(cfg.DNSProvider, cfg.DNSAPIToken); err != nil {
+	// Enforce wildcard TLS policy — obtains *.baseDomain covering all subdomains,
+	// and disables on-demand issuance so scanners can't trigger arbitrary certs.
+	if err := caddyClient.EnforceTLSPolicy(cfg.BaseDomain, cfg.DNSProvider, cfg.DNSAPIToken); err != nil {
 		log.Warn("could not enforce TLS policy", "err", err)
 	} else {
-		log.Info("TLS policy enforced: on-demand issuance disabled")
-	}
-
-	// Provision cert for the enrollment subdomain upfront.
-	enrollHost := "enroll." + cfg.BaseDomain
-	if err := caddyClient.ProvisionCert(enrollHost); err != nil {
-		log.Warn("cert provision failed", "host", enrollHost, "err", err)
+		log.Info("wildcard TLS policy enforced", "cert", "*."+cfg.BaseDomain)
 	}
 
 	// Reconcile static services: remove IP-upstream routes that are no longer in config.
@@ -101,9 +95,6 @@ func main() {
 			log.Warn("static service seed failed", "host", host, "err", err)
 		} else {
 			log.Info("registered static service", "host", host, "upstream", svc.Upstream)
-		}
-		if err := caddyClient.ProvisionCert(host); err != nil {
-			log.Warn("cert provision failed", "host", host, "err", err)
 		}
 	}
 

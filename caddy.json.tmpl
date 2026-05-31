@@ -58,6 +58,7 @@
     "tls": {
       "automation": {
         "policies": [{
+          "subjects": ["*.${CADDYGATE_BASE_DOMAIN}"],
           "issuers": [{
             "module": "acme",
             "challenges": {
